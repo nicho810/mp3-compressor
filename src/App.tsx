@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { FFmpeg } from '@ffmpeg/ffmpeg'
 import { fetchFile, toBlobURL } from '@ffmpeg/util'
+import { useI18n } from './useI18n'
 
 interface FileInfo {
   name: string
@@ -13,37 +14,25 @@ interface FileInfo {
 
 interface Preset {
   id: string
-  name: string
-  description: string
+  nameKey: string
+  descKey: string
   bitrate: number
-  sampleRate: number | null  // null means keep original
-  channels: number | null    // null means keep original
+  sampleRate: number | null
+  channels: number | null
 }
 
 const presets: Preset[] = [
-  { id: 'lossless', name: '近无损', description: '320kbps / 原始采样率 / 立体声', bitrate: 320, sampleRate: null, channels: 2 },
-  { id: 'high', name: '高品质', description: '256kbps / 44.1kHz / 立体声', bitrate: 256, sampleRate: 44100, channels: 2 },
-  { id: 'standard', name: '标准品质', description: '192kbps / 44.1kHz / 立体声', bitrate: 192, sampleRate: 44100, channels: 2 },
-  { id: 'medium', name: '中等品质', description: '128kbps / 44.1kHz / 立体声', bitrate: 128, sampleRate: 44100, channels: 2 },
-  { id: 'compact', name: '省空间', description: '96kbps / 32kHz / 立体声', bitrate: 96, sampleRate: 32000, channels: 2 },
-  { id: 'voice', name: '语音模式', description: '64kbps / 22.05kHz / 单声道', bitrate: 64, sampleRate: 22050, channels: 1 },
-  { id: 'minimal', name: '极限压缩', description: '32kbps / 16kHz / 单声道', bitrate: 32, sampleRate: 16000, channels: 1 },
-  { id: 'custom', name: '自定义', description: '自由选择参数', bitrate: 128, sampleRate: 44100, channels: 2 },
+  { id: 'lossless', nameKey: 'presetLossless', descKey: 'presetLosslessDesc', bitrate: 320, sampleRate: null, channels: 2 },
+  { id: 'high', nameKey: 'presetHigh', descKey: 'presetHighDesc', bitrate: 256, sampleRate: 44100, channels: 2 },
+  { id: 'standard', nameKey: 'presetStandard', descKey: 'presetStandardDesc', bitrate: 192, sampleRate: 44100, channels: 2 },
+  { id: 'medium', nameKey: 'presetMedium', descKey: 'presetMediumDesc', bitrate: 128, sampleRate: 44100, channels: 2 },
+  { id: 'compact', nameKey: 'presetCompact', descKey: 'presetCompactDesc', bitrate: 96, sampleRate: 32000, channels: 2 },
+  { id: 'voice', nameKey: 'presetVoice', descKey: 'presetVoiceDesc', bitrate: 64, sampleRate: 22050, channels: 1 },
+  { id: 'minimal', nameKey: 'presetMinimal', descKey: 'presetMinimalDesc', bitrate: 32, sampleRate: 16000, channels: 1 },
+  { id: 'custom', nameKey: 'presetCustom', descKey: 'presetCustomDesc', bitrate: 128, sampleRate: 44100, channels: 2 },
 ]
 
 const bitrateOptions = [320, 256, 192, 160, 128, 112, 96, 80, 64, 48, 32]
-const sampleRateOptions = [
-  { value: 48000, label: '48000 Hz (专业)' },
-  { value: 44100, label: '44100 Hz (CD标准)' },
-  { value: 32000, label: '32000 Hz (广播)' },
-  { value: 22050, label: '22050 Hz (语音)' },
-  { value: 16000, label: '16000 Hz (电话)' },
-  { value: 11025, label: '11025 Hz (低质量)' },
-]
-const channelOptions = [
-  { value: 2, label: '立体声' },
-  { value: 1, label: '单声道' },
-]
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B'
@@ -57,7 +46,45 @@ function formatDuration(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
+function LanguageSelector() {
+  const { language, setLanguage, languages } = useI18n()
+  const [isOpen, setIsOpen] = useState(false)
+
+  const currentLang = languages.find(l => l.code === language)
+
+  return (
+    <div className="language-selector">
+      <button
+        className="language-btn"
+        onClick={() => setIsOpen(!isOpen)}
+        onBlur={() => setTimeout(() => setIsOpen(false), 150)}
+      >
+        {currentLang?.name}
+        <span className="arrow">▼</span>
+      </button>
+      {isOpen && (
+        <div className="language-dropdown">
+          {languages.map(lang => (
+            <button
+              key={lang.code}
+              className={`language-option ${lang.code === language ? 'active' : ''}`}
+              onClick={() => {
+                setLanguage(lang.code)
+                setIsOpen(false)
+              }}
+            >
+              {lang.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function App() {
+  const { t } = useI18n()
+
   const [ffmpeg, setFfmpeg] = useState<FFmpeg | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -77,6 +104,20 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
 
+  const sampleRateOptions = [
+    { value: 48000, labelKey: 'sr48000' },
+    { value: 44100, labelKey: 'sr44100' },
+    { value: 32000, labelKey: 'sr32000' },
+    { value: 22050, labelKey: 'sr22050' },
+    { value: 16000, labelKey: 'sr16000' },
+    { value: 11025, labelKey: 'sr11025' },
+  ]
+
+  const channelOptions = [
+    { value: 2, labelKey: 'stereo' },
+    { value: 1, labelKey: 'mono' },
+  ]
+
   // Load FFmpeg
   useEffect(() => {
     const loadFFmpeg = async () => {
@@ -86,7 +127,7 @@ function App() {
         ffmpegInstance.on('progress', ({ progress, time }) => {
           setProgress(Math.round(progress * 100))
           if (time > 0) {
-            setProgressText(`处理中... ${formatDuration(time / 1000000)}`)
+            setProgressText(`${t('processing')} ${formatDuration(time / 1000000)}`)
           }
         })
 
@@ -100,7 +141,7 @@ function App() {
         setLoaded(true)
       } catch (err) {
         console.error('Failed to load FFmpeg:', err)
-        setError('加载音频处理引擎失败，请刷新页面重试')
+        setError(t('loadEngineFailed'))
       } finally {
         setLoading(false)
       }
@@ -151,7 +192,7 @@ function App() {
           }
         }
 
-        reader.onerror = () => reject(new Error('无法读取文件'))
+        reader.onerror = () => reject(new Error(t('cannotReadFile')))
         reader.readAsArrayBuffer(audioFile)
 
         URL.revokeObjectURL(audio.src)
@@ -159,14 +200,14 @@ function App() {
 
       audio.onerror = () => {
         URL.revokeObjectURL(audio.src)
-        reject(new Error('无法解析音频文件'))
+        reject(new Error(t('cannotParseAudio')))
       }
     })
-  }, [])
+  }, [t])
 
   const handleFileSelect = useCallback(async (selectedFile: File) => {
     if (!selectedFile.type.includes('audio') && !selectedFile.name.endsWith('.mp3')) {
-      setError('请选择音频文件')
+      setError(t('pleaseSelectAudio'))
       return
     }
 
@@ -178,9 +219,9 @@ function App() {
       const info = await parseAudioInfo(selectedFile)
       setFileInfo(info)
     } catch (err) {
-      setError('无法解析文件信息: ' + (err as Error).message)
+      setError(t('parseFileError') + ' ' + (err as Error).message)
     }
-  }, [parseAudioInfo])
+  }, [parseAudioInfo, t])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -197,7 +238,7 @@ function App() {
 
     setProcessing(true)
     setProgress(0)
-    setProgressText('准备中...')
+    setProgressText(t('preparing'))
     setError(null)
 
     try {
@@ -242,12 +283,12 @@ function App() {
 
     } catch (err) {
       console.error('Compression error:', err)
-      setError('压缩失败: ' + (err as Error).message)
+      setError(t('compressionFailed') + ' ' + (err as Error).message)
     } finally {
       setProcessing(false)
       setProgressText('')
     }
-  }, [ffmpeg, file, loaded, selectedPreset, customBitrate, customSampleRate, customChannels])
+  }, [ffmpeg, file, loaded, selectedPreset, customBitrate, customSampleRate, customChannels, t])
 
   const handleDownload = useCallback(() => {
     if (!result || !file) return
@@ -278,16 +319,20 @@ function App() {
     }
   }, [])
 
+  // Keep handleClear available for future use
+  void handleClear
+
   return (
     <div className="container">
-      <h1>MP3 压缩工具</h1>
+      <LanguageSelector />
+      <h1>{t('title')}</h1>
 
       {/* Loading Status */}
       {loading && (
         <div className="loading-bar">
           <div className="loading-bar-inner">
             <div className="spinner-small"></div>
-            <span>正在加载音频处理引擎...</span>
+            <span>{t('loadingEngine')}</span>
           </div>
         </div>
       )}
@@ -306,12 +351,12 @@ function App() {
           onClick={(e) => { e.stopPropagation(); !loading && fileInputRef.current?.click() }}
           disabled={loading}
         >
-          选择文件
+          {t('selectFile')}
         </button>
-        <div className="upload-text">或拖拽 MP3 文件到此处</div>
+        <div className="upload-text">{t('dragDropHint')}</div>
         {file && (
           <div className="selected-file-name" title={file.name}>
-            已选择: {file.name}
+            {t('selectedFile')} {file.name}
           </div>
         )}
       </div>
@@ -326,40 +371,40 @@ function App() {
 
       {/* File Info - Always visible */}
       <div className={`file-info ${!fileInfo ? 'disabled' : ''}`}>
-        <h3>文件信息</h3>
+        <h3>{t('fileInfo')}</h3>
         <div className="info-grid">
           <div className="info-item">
-            <div className="info-label">文件名</div>
+            <div className="info-label">{t('fileName')}</div>
             <div className="info-value" style={{ fontSize: '14px' }} title={fileInfo?.name}>
               {fileInfo?.name ? (fileInfo.name.length > 20 ? fileInfo.name.slice(0, 20) + '...' : fileInfo.name) : '--'}
             </div>
           </div>
           <div className="info-item">
-            <div className="info-label">文件大小</div>
+            <div className="info-label">{t('fileSize')}</div>
             <div className="info-value">{fileInfo ? formatFileSize(fileInfo.size) : '--'}</div>
           </div>
           <div className="info-item">
-            <div className="info-label">时长</div>
+            <div className="info-label">{t('duration')}</div>
             <div className="info-value">{fileInfo ? formatDuration(fileInfo.duration) : '--'}</div>
           </div>
           <div className="info-item">
-            <div className="info-label">比特率</div>
+            <div className="info-label">{t('bitrate')}</div>
             <div className="info-value">{fileInfo ? `${fileInfo.bitrate} kbps` : '--'}</div>
           </div>
           <div className="info-item">
-            <div className="info-label">采样率</div>
+            <div className="info-label">{t('sampleRate')}</div>
             <div className="info-value">{fileInfo ? `${fileInfo.sampleRate} Hz` : '--'}</div>
           </div>
           <div className="info-item">
-            <div className="info-label">声道</div>
-            <div className="info-value">{fileInfo ? (fileInfo.channels === 1 ? '单声道' : '立体声') : '--'}</div>
+            <div className="info-label">{t('channels')}</div>
+            <div className="info-value">{fileInfo ? (fileInfo.channels === 1 ? t('mono') : t('stereo')) : '--'}</div>
           </div>
         </div>
       </div>
 
       {/* Presets - Always visible */}
       <div className={`presets-section ${!file || result ? 'disabled' : ''}`}>
-        <h3>选择压缩预设</h3>
+        <h3>{t('selectPreset')}</h3>
         <div className="presets-grid">
           {presets.map((preset) => (
             <div
@@ -367,8 +412,8 @@ function App() {
               className={`preset-card ${selectedPreset === preset.id ? 'selected' : ''} ${!file || result ? 'disabled' : ''}`}
               onClick={() => file && !result && setSelectedPreset(preset.id)}
             >
-              <div className="preset-name">{preset.name}</div>
-              <div className="preset-desc">{preset.description}</div>
+              <div className="preset-name">{t(preset.nameKey)}</div>
+              <div className="preset-desc">{t(preset.descKey)}</div>
             </div>
           ))}
         </div>
@@ -376,10 +421,10 @@ function App() {
         {/* Custom Options */}
         {selectedPreset === 'custom' && (
           <div className="custom-options">
-            <h4>自定义参数</h4>
+            <h4>{t('customParams')}</h4>
             <div className="custom-grid">
               <div className="custom-item">
-                <label>比特率</label>
+                <label>{t('bitrate')}</label>
                 <select
                   value={customBitrate}
                   onChange={(e) => setCustomBitrate(Number(e.target.value))}
@@ -391,26 +436,26 @@ function App() {
                 </select>
               </div>
               <div className="custom-item">
-                <label>采样率</label>
+                <label>{t('sampleRate')}</label>
                 <select
                   value={customSampleRate}
                   onChange={(e) => setCustomSampleRate(Number(e.target.value))}
                   disabled={!file || !!result}
                 >
                   {sampleRateOptions.map((sr) => (
-                    <option key={sr.value} value={sr.value}>{sr.label}</option>
+                    <option key={sr.value} value={sr.value}>{t(sr.labelKey)}</option>
                   ))}
                 </select>
               </div>
               <div className="custom-item">
-                <label>声道</label>
+                <label>{t('channels')}</label>
                 <select
                   value={customChannels}
                   onChange={(e) => setCustomChannels(Number(e.target.value))}
                   disabled={!file || !!result}
                 >
                   {channelOptions.map((ch) => (
-                    <option key={ch.value} value={ch.value}>{ch.label}</option>
+                    <option key={ch.value} value={ch.value}>{t(ch.labelKey)}</option>
                   ))}
                 </select>
               </div>
@@ -437,8 +482,8 @@ function App() {
         const compressionRatio = Math.round((1 - estimatedSize / fileInfo.size) * 100)
         return (
           <div className="estimate-info">
-            <span>预计压缩后体积: <strong>{formatFileSize(estimatedSize)}</strong></span>
-            <span>压缩率: <strong className={compressionRatio > 0 ? 'positive' : 'negative'}>{compressionRatio > 0 ? `-${compressionRatio}%` : `+${Math.abs(compressionRatio)}%`}</strong></span>
+            <span>{t('estimatedSize')} <strong>{formatFileSize(estimatedSize)}</strong></span>
+            <span>{t('compressionRatio')} <strong className={compressionRatio > 0 ? 'positive' : 'negative'}>{compressionRatio > 0 ? `-${compressionRatio}%` : `+${Math.abs(compressionRatio)}%`}</strong></span>
           </div>
         )
       })()}
@@ -450,7 +495,7 @@ function App() {
           onClick={handleCompress}
           disabled={processing || !loaded}
         >
-          {processing ? '压缩中...' : '开始压缩'}
+          {processing ? t('compressing') : t('startCompress')}
         </button>
       )}
 
@@ -463,15 +508,15 @@ function App() {
                 <polyline points="20 6 9 17 4 12"></polyline>
               </svg>
             </div>
-            <h3>压缩完成</h3>
+            <h3>{t('compressionComplete')}</h3>
           </div>
           <div className="result-stats">
             <div className="stat-item">
-              <div className="stat-label">原始大小</div>
+              <div className="stat-label">{t('originalSize')}</div>
               <div className="stat-value">{formatFileSize(fileInfo.size)}</div>
             </div>
             <div className="stat-item">
-              <div className="stat-label">压缩后</div>
+              <div className="stat-label">{t('compressedSize')}</div>
               <div className="stat-value">{formatFileSize(result.size)}</div>
             </div>
             <div className="stat-item">
@@ -479,12 +524,12 @@ function App() {
                 const saved = Math.round((1 - result.size / fileInfo.size) * 100)
                 return saved >= 0 ? (
                   <>
-                    <div className="stat-label">节省</div>
+                    <div className="stat-label">{t('saved')}</div>
                     <div className="stat-value highlight">{saved}%</div>
                   </>
                 ) : (
                   <>
-                    <div className="stat-label">增加</div>
+                    <div className="stat-label">{t('increased')}</div>
                     <div className="stat-value negative">{Math.abs(saved)}%</div>
                   </>
                 )
@@ -493,10 +538,10 @@ function App() {
           </div>
           <div className="result-buttons">
             <button className="redo-btn" onClick={() => setResult(null)}>
-              重新压缩
+              {t('recompress')}
             </button>
             <button className="download-btn" onClick={handleDownload}>
-              下载压缩文件
+              {t('download')}
             </button>
           </div>
         </div>
