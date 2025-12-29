@@ -15,15 +15,34 @@ interface Preset {
   id: string
   name: string
   description: string
-  bitrate: string
-  bitrateKbps: number
+  bitrate: number
+  sampleRate: number | null  // null means keep original
+  channels: number | null    // null means keep original
 }
 
 const presets: Preset[] = [
-  { id: 'high', name: '高品质', description: '适合音乐收藏', bitrate: '192k', bitrateKbps: 192 },
-  { id: 'medium', name: '标准品质', description: '平衡大小和音质', bitrate: '128k', bitrateKbps: 128 },
-  { id: 'low', name: '省空间', description: '适合语音/播客', bitrate: '96k', bitrateKbps: 96 },
-  { id: 'min', name: '极限压缩', description: '最小文件体积', bitrate: '64k', bitrateKbps: 64 },
+  { id: 'lossless', name: '近无损', description: '320kbps / 原始采样率 / 立体声', bitrate: 320, sampleRate: null, channels: 2 },
+  { id: 'high', name: '高品质', description: '256kbps / 44.1kHz / 立体声', bitrate: 256, sampleRate: 44100, channels: 2 },
+  { id: 'standard', name: '标准品质', description: '192kbps / 44.1kHz / 立体声', bitrate: 192, sampleRate: 44100, channels: 2 },
+  { id: 'medium', name: '中等品质', description: '128kbps / 44.1kHz / 立体声', bitrate: 128, sampleRate: 44100, channels: 2 },
+  { id: 'compact', name: '省空间', description: '96kbps / 32kHz / 立体声', bitrate: 96, sampleRate: 32000, channels: 2 },
+  { id: 'voice', name: '语音模式', description: '64kbps / 22.05kHz / 单声道', bitrate: 64, sampleRate: 22050, channels: 1 },
+  { id: 'minimal', name: '极限压缩', description: '32kbps / 16kHz / 单声道', bitrate: 32, sampleRate: 16000, channels: 1 },
+  { id: 'custom', name: '自定义', description: '自由选择参数', bitrate: 128, sampleRate: 44100, channels: 2 },
+]
+
+const bitrateOptions = [320, 256, 192, 160, 128, 112, 96, 80, 64, 48, 32]
+const sampleRateOptions = [
+  { value: 48000, label: '48000 Hz (专业)' },
+  { value: 44100, label: '44100 Hz (CD标准)' },
+  { value: 32000, label: '32000 Hz (广播)' },
+  { value: 22050, label: '22050 Hz (语音)' },
+  { value: 16000, label: '16000 Hz (电话)' },
+  { value: 11025, label: '11025 Hz (低质量)' },
+]
+const channelOptions = [
+  { value: 2, label: '立体声' },
+  { value: 1, label: '单声道' },
 ]
 
 function formatFileSize(bytes: number): string {
@@ -45,6 +64,9 @@ function App() {
   const [file, setFile] = useState<File | null>(null)
   const [fileInfo, setFileInfo] = useState<FileInfo | null>(null)
   const [selectedPreset, setSelectedPreset] = useState<string>('medium')
+  const [customBitrate, setCustomBitrate] = useState<number>(128)
+  const [customSampleRate, setCustomSampleRate] = useState<number>(44100)
+  const [customChannels, setCustomChannels] = useState<number>(2)
   const [processing, setProcessing] = useState(false)
   const [progress, setProgress] = useState(0)
   const [progressText, setProgressText] = useState('')
@@ -181,17 +203,29 @@ function App() {
     try {
       const preset = presets.find(p => p.id === selectedPreset)!
 
+      // Determine actual parameters
+      const bitrate = selectedPreset === 'custom' ? customBitrate : preset.bitrate
+      const sampleRate = selectedPreset === 'custom' ? customSampleRate : preset.sampleRate
+      const channels = selectedPreset === 'custom' ? customChannels : preset.channels
+
       // Write input file
       await ffmpeg.writeFile('input.mp3', await fetchFile(file))
 
+      // Build FFmpeg command
+      const args = ['-i', 'input.mp3', '-b:a', `${bitrate}k`]
+
+      if (sampleRate) {
+        args.push('-ar', sampleRate.toString())
+      }
+
+      if (channels) {
+        args.push('-ac', channels.toString())
+      }
+
+      args.push('-map', '0:a', '-y', 'output.mp3')
+
       // Run compression
-      await ffmpeg.exec([
-        '-i', 'input.mp3',
-        '-b:a', preset.bitrate,
-        '-map', '0:a',
-        '-y',
-        'output.mp3'
-      ])
+      await ffmpeg.exec(args)
 
       // Read output file
       const data = await ffmpeg.readFile('output.mp3')
@@ -213,14 +247,15 @@ function App() {
       setProcessing(false)
       setProgressText('')
     }
-  }, [ffmpeg, file, loaded, selectedPreset])
+  }, [ffmpeg, file, loaded, selectedPreset, customBitrate, customSampleRate, customChannels])
 
   const handleDownload = useCallback(() => {
     if (!result || !file) return
 
     const preset = presets.find(p => p.id === selectedPreset)!
     const originalName = file.name.replace(/\.[^/.]+$/, '')
-    const fileName = `${originalName}_${preset.name}.mp3`
+    const bitrate = selectedPreset === 'custom' ? customBitrate : preset.bitrate
+    const fileName = `${originalName}_${bitrate}kbps.mp3`
 
     const url = URL.createObjectURL(result.blob)
     const a = document.createElement('a')
@@ -230,7 +265,7 @@ function App() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-  }, [result, file, selectedPreset])
+  }, [result, file, selectedPreset, customBitrate])
 
   const handleClear = useCallback(() => {
     setFile(null)
@@ -243,39 +278,43 @@ function App() {
     }
   }, [])
 
-  if (loading) {
-    return (
-      <div className="container">
-        <h1>MP3 压缩工具</h1>
-        <div className="loading-section">
-          <div className="spinner"></div>
-          <p>正在加载音频处理引擎...</p>
-          <p style={{ fontSize: '12px', color: '#999', marginTop: '10px' }}>
-            首次加载可能需要几秒钟
-          </p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="container">
       <h1>MP3 压缩工具</h1>
 
-      {/* Upload Area */}
-      {!file && (
-        <div
-          className={`upload-area ${dragging ? 'dragging' : ''}`}
-          onClick={() => fileInputRef.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={handleDrop}
-        >
-          <div className="upload-icon">🎵</div>
-          <div className="upload-text">点击或拖拽上传 MP3 文件</div>
-          <div className="upload-hint">支持 MP3 格式音频文件</div>
+      {/* Loading Status */}
+      {loading && (
+        <div className="loading-bar">
+          <div className="loading-bar-inner">
+            <div className="spinner-small"></div>
+            <span>正在加载音频处理引擎...</span>
+          </div>
         </div>
       )}
+
+      {/* Upload Area */}
+      <div
+        className={`upload-area ${dragging ? 'dragging' : ''} ${loading ? 'disabled' : ''}`}
+        onClick={() => !loading && fileInputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); if (!loading) setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => { if (!loading) handleDrop(e); else { e.preventDefault(); setDragging(false) } }}
+      >
+        <div className="upload-icon">🎵</div>
+        <button
+          className="select-file-btn"
+          onClick={(e) => { e.stopPropagation(); !loading && fileInputRef.current?.click() }}
+          disabled={loading}
+        >
+          选择文件
+        </button>
+        <div className="upload-text">或拖拽 MP3 文件到此处</div>
+        {file && (
+          <div className="selected-file-name" title={file.name}>
+            已选择: {file.name}
+          </div>
+        )}
+      </div>
 
       <input
         ref={fileInputRef}
@@ -285,60 +324,100 @@ function App() {
         onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
       />
 
-      {/* File Info */}
-      {fileInfo && (
-        <div className="file-info">
-          <h3>📄 文件信息</h3>
-          <div className="info-grid">
-            <div className="info-item">
-              <div className="info-label">文件名</div>
-              <div className="info-value" style={{ fontSize: '14px', wordBreak: 'break-all' }}>
-                {fileInfo.name}
-              </div>
-            </div>
-            <div className="info-item">
-              <div className="info-label">文件大小</div>
-              <div className="info-value">{formatFileSize(fileInfo.size)}</div>
-            </div>
-            <div className="info-item">
-              <div className="info-label">时长</div>
-              <div className="info-value">{formatDuration(fileInfo.duration)}</div>
-            </div>
-            <div className="info-item">
-              <div className="info-label">比特率</div>
-              <div className="info-value">{fileInfo.bitrate} kbps</div>
-            </div>
-            <div className="info-item">
-              <div className="info-label">采样率</div>
-              <div className="info-value">{fileInfo.sampleRate} Hz</div>
-            </div>
-            <div className="info-item">
-              <div className="info-label">声道</div>
-              <div className="info-value">{fileInfo.channels === 1 ? '单声道' : '立体声'}</div>
+      {/* File Info - Always visible */}
+      <div className={`file-info ${!fileInfo ? 'disabled' : ''}`}>
+        <h3>文件信息</h3>
+        <div className="info-grid">
+          <div className="info-item">
+            <div className="info-label">文件名</div>
+            <div className="info-value" style={{ fontSize: '14px' }} title={fileInfo?.name}>
+              {fileInfo?.name ? (fileInfo.name.length > 20 ? fileInfo.name.slice(0, 20) + '...' : fileInfo.name) : '--'}
             </div>
           </div>
+          <div className="info-item">
+            <div className="info-label">文件大小</div>
+            <div className="info-value">{fileInfo ? formatFileSize(fileInfo.size) : '--'}</div>
+          </div>
+          <div className="info-item">
+            <div className="info-label">时长</div>
+            <div className="info-value">{fileInfo ? formatDuration(fileInfo.duration) : '--'}</div>
+          </div>
+          <div className="info-item">
+            <div className="info-label">比特率</div>
+            <div className="info-value">{fileInfo ? `${fileInfo.bitrate} kbps` : '--'}</div>
+          </div>
+          <div className="info-item">
+            <div className="info-label">采样率</div>
+            <div className="info-value">{fileInfo ? `${fileInfo.sampleRate} Hz` : '--'}</div>
+          </div>
+          <div className="info-item">
+            <div className="info-label">声道</div>
+            <div className="info-value">{fileInfo ? (fileInfo.channels === 1 ? '单声道' : '立体声') : '--'}</div>
+          </div>
         </div>
-      )}
+      </div>
 
-      {/* Presets */}
-      {file && !result && (
-        <div className="presets-section">
-          <h3>选择压缩预设</h3>
-          <div className="presets-grid">
-            {presets.map((preset) => (
-              <div
-                key={preset.id}
-                className={`preset-card ${selectedPreset === preset.id ? 'selected' : ''}`}
-                onClick={() => setSelectedPreset(preset.id)}
-              >
-                <div className="preset-name">{preset.name}</div>
-                <div className="preset-desc">{preset.description}</div>
-                <div className="preset-bitrate">{preset.bitrateKbps} kbps</div>
-              </div>
-            ))}
-          </div>
+      {/* Presets - Always visible */}
+      <div className={`presets-section ${!file || result ? 'disabled' : ''}`}>
+        <h3>选择压缩预设</h3>
+        <div className="presets-grid">
+          {presets.map((preset) => (
+            <div
+              key={preset.id}
+              className={`preset-card ${selectedPreset === preset.id ? 'selected' : ''} ${!file || result ? 'disabled' : ''}`}
+              onClick={() => file && !result && setSelectedPreset(preset.id)}
+            >
+              <div className="preset-name">{preset.name}</div>
+              <div className="preset-desc">{preset.description}</div>
+            </div>
+          ))}
         </div>
-      )}
+
+        {/* Custom Options */}
+        {selectedPreset === 'custom' && (
+          <div className="custom-options">
+            <h4>自定义参数</h4>
+            <div className="custom-grid">
+              <div className="custom-item">
+                <label>比特率</label>
+                <select
+                  value={customBitrate}
+                  onChange={(e) => setCustomBitrate(Number(e.target.value))}
+                  disabled={!file || !!result}
+                >
+                  {bitrateOptions.map((br) => (
+                    <option key={br} value={br}>{br} kbps</option>
+                  ))}
+                </select>
+              </div>
+              <div className="custom-item">
+                <label>采样率</label>
+                <select
+                  value={customSampleRate}
+                  onChange={(e) => setCustomSampleRate(Number(e.target.value))}
+                  disabled={!file || !!result}
+                >
+                  {sampleRateOptions.map((sr) => (
+                    <option key={sr.value} value={sr.value}>{sr.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="custom-item">
+                <label>声道</label>
+                <select
+                  value={customChannels}
+                  onChange={(e) => setCustomChannels(Number(e.target.value))}
+                  disabled={!file || !!result}
+                >
+                  {channelOptions.map((ch) => (
+                    <option key={ch.value} value={ch.value}>{ch.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Progress */}
       {processing && (
@@ -349,6 +428,20 @@ function App() {
           <div className="progress-text">{progressText || `${progress}%`}</div>
         </div>
       )}
+
+      {/* Estimated Size */}
+      {file && fileInfo && !result && !processing && (() => {
+        const preset = presets.find(p => p.id === selectedPreset)!
+        const bitrate = selectedPreset === 'custom' ? customBitrate : preset.bitrate
+        const estimatedSize = Math.round(bitrate * 125 * fileInfo.duration)
+        const compressionRatio = Math.round((1 - estimatedSize / fileInfo.size) * 100)
+        return (
+          <div className="estimate-info">
+            <span>预计压缩后体积: <strong>{formatFileSize(estimatedSize)}</strong></span>
+            <span>压缩率: <strong className={compressionRatio > 0 ? 'positive' : 'negative'}>{compressionRatio > 0 ? `-${compressionRatio}%` : `+${Math.abs(compressionRatio)}%`}</strong></span>
+          </div>
+        )
+      })()}
 
       {/* Compress Button */}
       {file && !result && (
@@ -364,7 +457,14 @@ function App() {
       {/* Result */}
       {result && fileInfo && (
         <div className="result-section">
-          <h3>✅ 压缩完成</h3>
+          <div className="result-header">
+            <div className="success-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+            <h3>压缩完成</h3>
+          </div>
           <div className="result-stats">
             <div className="stat-item">
               <div className="stat-label">原始大小</div>
@@ -375,28 +475,36 @@ function App() {
               <div className="stat-value">{formatFileSize(result.size)}</div>
             </div>
             <div className="stat-item">
-              <div className="stat-label">节省</div>
-              <div className="stat-value highlight">
-                {Math.round((1 - result.size / fileInfo.size) * 100)}%
-              </div>
+              {(() => {
+                const saved = Math.round((1 - result.size / fileInfo.size) * 100)
+                return saved >= 0 ? (
+                  <>
+                    <div className="stat-label">节省</div>
+                    <div className="stat-value highlight">{saved}%</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="stat-label">增加</div>
+                    <div className="stat-value negative">{Math.abs(saved)}%</div>
+                  </>
+                )
+              })()}
             </div>
           </div>
-          <button className="download-btn" onClick={handleDownload}>
-            下载压缩文件
-          </button>
+          <div className="result-buttons">
+            <button className="redo-btn" onClick={() => setResult(null)}>
+              重新压缩
+            </button>
+            <button className="download-btn" onClick={handleDownload}>
+              下载压缩文件
+            </button>
+          </div>
         </div>
       )}
 
       {/* Error */}
       {error && (
         <div className="error-message">{error}</div>
-      )}
-
-      {/* Clear Button */}
-      {file && (
-        <button className="clear-btn" onClick={handleClear}>
-          重新选择文件
-        </button>
       )}
 
       <audio ref={audioRef} style={{ display: 'none' }} />
