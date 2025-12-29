@@ -55,29 +55,39 @@ function LanguageSelector() {
   return (
     <div className="language-selector">
       <button
-        className="language-btn"
+        className={`language-btn ${isOpen ? 'open' : ''}`}
         onClick={() => setIsOpen(!isOpen)}
         onBlur={() => setTimeout(() => setIsOpen(false), 150)}
       >
-        {currentLang?.name}
-        <span className="arrow">▼</span>
+        <svg className="globe-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="2" y1="12" x2="22" y2="12"></line>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+        </svg>
+        <span className="lang-name">{currentLang?.name}</span>
+        <svg className={`chevron ${isOpen ? 'rotated' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
       </button>
-      {isOpen && (
-        <div className="language-dropdown">
-          {languages.map(lang => (
-            <button
-              key={lang.code}
-              className={`language-option ${lang.code === language ? 'active' : ''}`}
-              onClick={() => {
-                setLanguage(lang.code)
-                setIsOpen(false)
-              }}
-            >
-              {lang.name}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className={`language-dropdown ${isOpen ? 'show' : ''}`}>
+        {languages.map(lang => (
+          <button
+            key={lang.code}
+            className={`language-option ${lang.code === language ? 'active' : ''}`}
+            onClick={() => {
+              setLanguage(lang.code)
+              setIsOpen(false)
+            }}
+          >
+            {lang.code === language && (
+              <svg className="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            )}
+            <span>{lang.name}</span>
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -324,8 +334,10 @@ function App() {
 
   return (
     <div className="container">
-      <LanguageSelector />
-      <h1>{t('title')}</h1>
+      <div className="header">
+        <h1>{t('title')}</h1>
+        <LanguageSelector />
+      </div>
 
       {/* Loading Status */}
       {loading && (
