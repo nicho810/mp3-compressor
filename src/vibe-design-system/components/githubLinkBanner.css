@@ -1,0 +1,47 @@
+.vds-githubLinkBanner {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--vds-space-16);
+  padding-bottom: var(--vds-space-8);
+}
+
+.vds-githubLinkBanner__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--vds-space-12);
+  padding: 10px 14px;
+  background: var(--vds-color-accent);
+  color: var(--vds-color-text-primary);
+  border: var(--vds-border-width) solid var(--vds-color-border);
+  border-radius: 0;
+  box-shadow: var(--vds-shadow-offset) var(--vds-shadow-offset) 0 var(--vds-color-border);
+  font-size: var(--vds-font-size-14);
+  font-weight: 900;
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: -0.3px;
+  transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.1s ease;
+}
+
+.vds-githubLinkBanner__link:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--vds-color-border);
+  background: var(--vds-color-accent-hover);
+}
+
+.vds-githubLinkBanner__link:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 var(--vds-color-border);
+}
+
+.vds-githubLinkBanner__icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.vds-githubLinkBanner__repo {
+  font-size: var(--vds-font-size-12);
+  font-weight: 800;
+  opacity: 0.9;
+}

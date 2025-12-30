@@ -4,6 +4,10 @@ A powerful online MP3 compression tool that runs entirely in your browser. No fi
 
 ![MP3 Compressor Screenshot](ScreenShot.webp)
 
+## Online Demo
+
+Try it online: https://mp3-compressor.tools.ioatlas.com/
+
 ## Why This Tool?
 
 Unlike other online MP3 compressors, this tool provides:

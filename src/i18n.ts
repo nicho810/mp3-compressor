@@ -16,6 +16,7 @@ export const translations: Record<Language, Translations> = {
   en: {
     // Title
     title: 'MP3 Compressor',
+    viewOnGithub: 'View on GitHub',
 
     // Loading
     loadingEngine: 'Loading audio processing engine...',
@@ -97,6 +98,7 @@ export const translations: Record<Language, Translations> = {
   },
   'zh-TW': {
     title: 'MP3 壓縮工具',
+    viewOnGithub: '在 GitHub 查看',
     loadingEngine: '正在載入音訊處理引擎...',
     loadEngineFailed: '載入音訊處理引擎失敗，請重新整理頁面',
     selectFile: '選擇檔案',
@@ -156,6 +158,7 @@ export const translations: Record<Language, Translations> = {
   },
   ja: {
     title: 'MP3 圧縮ツール',
+    viewOnGithub: 'GitHubで見る',
     loadingEngine: 'オーディオ処理エンジンを読み込み中...',
     loadEngineFailed: 'オーディオ処理エンジンの読み込みに失敗しました。ページを更新してください。',
     selectFile: 'ファイルを選択',
@@ -215,6 +218,7 @@ export const translations: Record<Language, Translations> = {
   },
   de: {
     title: 'MP3 Kompressor',
+    viewOnGithub: 'Auf GitHub ansehen',
     loadingEngine: 'Audio-Engine wird geladen...',
     loadEngineFailed: 'Audio-Engine konnte nicht geladen werden. Bitte Seite neu laden.',
     selectFile: 'Datei auswählen',
@@ -274,6 +278,7 @@ export const translations: Record<Language, Translations> = {
   },
   fr: {
     title: 'Compresseur MP3',
+    viewOnGithub: 'Voir sur GitHub',
     loadingEngine: 'Chargement du moteur audio...',
     loadEngineFailed: 'Échec du chargement du moteur audio. Veuillez rafraîchir la page.',
     selectFile: 'Choisir un fichier',

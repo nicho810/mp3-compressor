@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { FFmpeg } from '@ffmpeg/ffmpeg'
 import { fetchFile, toBlobURL } from '@ffmpeg/util'
 import { useI18n } from './useI18n'
+import GithubLinkBanner from './vibe-design-system/components/GithubLinkBanner'
 
 interface FileInfo {
   name: string
@@ -333,21 +334,22 @@ function App() {
   void handleClear
 
   return (
-    <div className="container">
-      <div className="header">
-        <h1>{t('title')}</h1>
-        <LanguageSelector />
-      </div>
-
-      {/* Loading Status */}
-      {loading && (
-        <div className="loading-bar">
-          <div className="loading-bar-inner">
-            <div className="spinner-small"></div>
-            <span>{t('loadingEngine')}</span>
-          </div>
+    <>
+      <div className="container">
+        <div className="header">
+          <h1>{t('title')}</h1>
+          <LanguageSelector />
         </div>
-      )}
+
+        {/* Loading Status */}
+        {loading && (
+          <div className="loading-bar">
+            <div className="loading-bar-inner">
+              <div className="spinner-small"></div>
+              <span>{t('loadingEngine')}</span>
+            </div>
+          </div>
+        )}
 
       {/* Upload Area */}
       <div
@@ -564,8 +566,15 @@ function App() {
         <div className="error-message">{error}</div>
       )}
 
-      <audio ref={audioRef} style={{ display: 'none' }} />
-    </div>
+        <audio ref={audioRef} style={{ display: 'none' }} />
+      </div>
+
+      <GithubLinkBanner
+        href="https://github.com/nicho810/mp3-compressor"
+        label={t('viewOnGithub')}
+        repo="nicho810/mp3-compressor"
+      />
+    </>
   )
 }
 
